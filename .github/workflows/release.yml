@@ -1,0 +1,47 @@
+name: Build and Release Binaries
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux
+            bin: carbon-linux
+          - os: macos-latest
+            target: macos
+            bin: carbon-macos
+          - os: windows-latest
+            target: windows
+            bin: carbon.exe
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Build release binary
+      run: cargo build --release
+
+    - name: Rename binary
+      run: |
+        if [ "${{ matrix.target }}" = "windows" ]; then
+          mv target/release/carbon.exe ${{ matrix.bin }}
+        else
+          mv target/release/carbon ${{ matrix.bin }}
+        fi
+      shell: bash
+
+    - name: Upload release asset
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ${{ matrix.bin }}
