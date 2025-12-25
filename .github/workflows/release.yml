@@ -18,34 +18,51 @@ jobs:
           - os: ubuntu-latest
             target: linux
             bin: carbon-linux
+            platform: linux
           - os: macos-latest
             target: macos
             bin: carbon-macos
+            platform: macos
           - os: windows-latest
             target: windows
             bin: carbon.exe
+            platform: win64
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Rust
-      uses: dtolnay/rust-toolchain@stable
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
 
-    - name: Build release binary
-      run: cargo build --release
+      - name: Build release binary
+        run: cargo build --release
 
-    - name: Rename binary
-      run: |
-        if [ "${{ matrix.target }}" = "windows" ]; then
-          mv target/release/carbon.exe ${{ matrix.bin }}
-        else
-          mv target/release/carbon ${{ matrix.bin }}
-        fi
-      shell: bash
+      - name: Rename binary
+        run: |
+          if [ "${{ matrix.target }}" = "windows" ]; then
+            mv target/release/carbon.exe ${{ matrix.bin }}
+          else
+            mv target/release/carbon ${{ matrix.bin }}
+          fi
+        shell: bash
 
-    - name: Upload release asset
-      uses: softprops/action-gh-release@v1
-      with:
-        files: ${{ matrix.bin }}
-        fail_on_unmatched_files: true
+      - name: Create zip (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          ZIP_NAME="carbon-${{ github.event.release.tag_name }}-${{ matrix.platform }}.zip"
+          zip -j "${ZIP_NAME}" "${{ matrix.bin }}"
+        shell: bash
+
+      - name: Create zip (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $zipName = "carbon-${{ github.event.release.tag_name }}-${{ matrix.platform }}.zip"
+          Compress-Archive -Path "${{ matrix.bin }}" -DestinationPath $zipName -Force
+        shell: pwsh
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v1
+        with:
+          files: carbon-${{ github.event.release.tag_name }}-${{ matrix.platform }}.zip
+          fail_on_unmatched_files: true

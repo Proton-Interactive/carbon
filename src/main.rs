@@ -10,7 +10,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use reqwest::Client;
+
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -21,20 +21,20 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Starts the sync server (default)
+
     Serve {
         #[arg(short, long, default_value_t = 8000)]
         port: u16,
     },
-    /// Import scripts from Roblox
+
     Import,
-    /// Export scripts to Roblox
+
     Export,
-    /// Generate sourcemap for Luau LSP
+
     Sourcemap,
-    /// Start LSP server
+
     Lsp,
-    /// Install the Roblox Studio plugin from the latest GitHub release
+
     InstallPlugin,
 }
 
@@ -49,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
-    // Default port
+
     let port = 8000;
 
     match &cli.command {
@@ -73,8 +73,8 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Lsp) => {
             info!("Starting LSP...");
-            // In a real implementation, this would start the language server loop.
-            // For now, we just keep the process alive so Zed doesn't think it crashed.
+
+
             println!("Carbon LSP started (placeholder)");
             std::future::pending::<()>().await;
         }
@@ -83,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
             install_plugin().await?;
         }
         None => {
-            // Default to serve if no command provided
+
             info!("Starting server on default port {}", port);
             server(port).await?;
         }
@@ -101,7 +101,7 @@ async fn server(port: u16) -> anyhow::Result<()> {
         .route("/", get(root))
         .route("/poll", get(poll_command))
         .route("/command", post(receive_command))
-        // Placeholder for actual sync endpoints
+
         .route("/sync/update", post(sync_update))
         .with_state(state);
 
@@ -120,7 +120,7 @@ async fn root() -> Json<serde_json::Value> {
 
 async fn poll_command(State(state): State<AppState>) -> Json<serde_json::Value> {
     let cmd = state.pop_command();
-    // Returns { "command": "import" } or { "command": null }
+
     Json(serde_json::json!({ "command": cmd }))
 }
 
@@ -188,7 +188,7 @@ async fn send_command_to_server(cmd: SyncCommand, port: u16) -> anyhow::Result<(
     let body = serde_json::to_string(&cmd)?;
     let len = body.len();
 
-    // Construct a minimal HTTP POST request
+
     let request = format!(
         "POST /command HTTP/1.1\r\n\
          Host: 127.0.0.1:{}\r\n\
@@ -207,7 +207,7 @@ async fn send_command_to_server(cmd: SyncCommand, port: u16) -> anyhow::Result<(
             stream.write_all(request.as_bytes()).await?;
 
             let mut response = String::new();
-            // Read response (simplified)
+
             stream.read_to_string(&mut response).await?;
 
             if response.contains("200 OK") {
@@ -227,14 +227,33 @@ async fn send_command_to_server(cmd: SyncCommand, port: u16) -> anyhow::Result<(
 }
 
 async fn install_plugin() -> anyhow::Result<()> {
-    let client = Client::new();
+    let token = std::env::var("GITHUB_TOKEN").ok();
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(
+        reqwest::header::USER_AGENT,
+        reqwest::header::HeaderValue::from_static("carbon/2.0"),
+    );
+    headers.insert(
+        reqwest::header::ACCEPT,
+        reqwest::header::HeaderValue::from_static("application/vnd.github.v3+json"),
+    );
+    if let Some(ref t) = token {
+        let auth_value = reqwest::header::HeaderValue::from_str(&format!("token {}", t))
+            .map_err(|e| anyhow::anyhow!("Invalid GITHUB_TOKEN header: {}", e))?;
+        headers.insert(reqwest::header::AUTHORIZATION, auth_value);
+        info!("Using GITHUB_TOKEN for GitHub API requests");
+    }
+
+    let client = reqwest::Client::builder().default_headers(headers).build()?;
     let url = "https://api.github.com/repos/Proton-Interactive/carbon-plugin/releases/latest";
 
     info!("Fetching latest release from GitHub...");
     let response = client.get(url).send().await?;
     if !response.status().is_success() {
-        error!("Failed to fetch release: {}", response.status());
-        return Err(anyhow::anyhow!("Failed to fetch release"));
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        error!("Failed to fetch release: {} - {}", status, body);
+        return Err(anyhow::anyhow!("Failed to fetch release: {}", status));
     }
 
     let release: serde_json::Value = response.json().await?;
@@ -249,17 +268,19 @@ async fn install_plugin() -> anyhow::Result<()> {
     info!("Downloading plugin from {}", download_url);
     let plugin_response = client.get(download_url).send().await?;
     if !plugin_response.status().is_success() {
-        error!("Failed to download plugin: {}", plugin_response.status());
-        return Err(anyhow::anyhow!("Failed to download plugin"));
+        let status = plugin_response.status();
+        let body = plugin_response.text().await.unwrap_or_default();
+        error!("Failed to download plugin: {} - {}", status, body);
+        return Err(anyhow::anyhow!("Failed to download plugin: {}", status));
     }
 
     let plugin_data = plugin_response.bytes().await?;
 
     let local_app_data = std::env::var("LOCALAPPDATA")?;
-    let plugins_dir = std::path::Path::new(&local_app_data).join("Roblox Studio").join("Plugins");
+    let plugins_dir = std::path::Path::new(&local_app_data).join("Roblox").join("Plugins");
     std::fs::create_dir_all(&plugins_dir)?;
 
-    let plugin_path = plugins_dir.join("Carbon.rbxmx");
+    let plugin_path = plugins_dir.join("carbon.rbxmx");
     std::fs::write(&plugin_path, plugin_data)?;
 
     info!("Plugin installed to {:?}", plugin_path);

@@ -23,7 +23,7 @@ impl SourcemapNode {
     }
 }
 
-/// Generates a sourcemap JSON string by walking the 'game' directory.
+
 pub fn generate_sourcemap(root_path: PathBuf) -> anyhow::Result<String> {
     let game_path = root_path.join("game");
     let mut root = SourcemapNode::new("Project", "DataModel");
@@ -35,7 +35,7 @@ pub fn generate_sourcemap(root_path: PathBuf) -> anyhow::Result<String> {
                 if path.is_dir() {
                     let dir_name = entry.file_name().to_string_lossy().to_string();
 
-                    // Map top-level directories to Roblox Services
+
                     let class_name = match dir_name.as_str() {
                         "ServerScriptService" => "ServerScriptService",
                         "ReplicatedStorage" => "ReplicatedStorage",
@@ -70,8 +70,7 @@ fn walk_directory(dir_path: &Path, name: &str, class_name: &str) -> Option<Sourc
 
     let mut node = SourcemapNode::new(name, class_name);
 
-    // Check for init scripts to associate with this folder node
-    // Priority: init.server.luau (Script), init.client.luau (LocalScript), init.luau (ModuleScript)
+
     let init_server = dir_path.join("init.server.luau");
     let init_client = dir_path.join("init.client.luau");
     let init_module = dir_path.join("init.luau");
@@ -93,7 +92,7 @@ fn walk_directory(dir_path: &Path, name: &str, class_name: &str) -> Option<Sourc
             let file_name = entry.file_name().to_string_lossy().to_string();
 
             if path.is_dir() {
-                // Handle special sub-folders in services
+
                 let child_class = if name == "StarterPlayer" && file_name == "StarterPlayerScripts" {
                     "StarterPlayerScripts"
                 } else if name == "StarterPlayer" && file_name == "StarterCharacterScripts" {
@@ -106,7 +105,7 @@ fn walk_directory(dir_path: &Path, name: &str, class_name: &str) -> Option<Sourc
                     node.children.push(child_node);
                 }
             } else if path.is_file() {
-                // Skip init scripts as they are handled by the parent folder
+
                 if file_name.starts_with("init.") {
                     continue;
                 }
